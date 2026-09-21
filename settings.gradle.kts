@@ -22,5 +22,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "energy"
+rootProject.name = "SmartMoney"
 include(":app")

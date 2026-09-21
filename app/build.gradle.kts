@@ -20,11 +20,11 @@ val supabaseAnonKey: String = localProperties.getProperty("SUPABASE_ANON_KEY")
     ?: "sb_publishable_PeXsVtIFu1lsECKVbIp2cA_-Z5Wzu3V"
 
 android {
-    namespace = "com.example.energy"
+    namespace = "com.example.smartmoney"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.energy"
+        applicationId = "com.example.smartmoney"
         minSdk = 24
         targetSdk = 35
         versionCode = 1
