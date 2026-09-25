@@ -2,7 +2,7 @@
 **Project**: Energy Android Application & SmartMoney Intelligence Backend  
 **Document**: `tobackend.md`  
 **Target Backend**: Spring Boot Service (`SM-BACKEND` @ `http://10.0.2.2:8080/`)  
-**Target Mobile**: Android Kotlin Client (`com.example.energy`)  
+**Target Mobile**: Android Kotlin Client (`com.example.smartmoney`)  
 **Status**: Production-Ready Reference  
 
 ---
@@ -176,9 +176,9 @@ In production, cleartext traffic must never be globally allowed. The system swit
 The Retrofit client is configured as a thread-safe Kotlin singleton object in [`RetrofitClient.kt`](file:///home/frank/AndroidStudioProjects/energy/app/src/main/java/com/example/energy/data/remote/RetrofitClient.kt):
 
 ```kotlin
-package com.example.energy.data.remote
+package com.example.smartmoney.data.remote
 
-import com.example.energy.data.remote.api.AuthApi
+import com.example.smartmoney.data.remote.api.AuthApi
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -232,7 +232,7 @@ object RetrofitClient {
 Located in [`AuthApi.kt`](file:///home/frank/AndroidStudioProjects/energy/app/src/main/java/com/example/energy/data/remote/api/AuthApi.kt):
 
 ```kotlin
-package com.example.energy.data.remote.api
+package com.example.smartmoney.data.remote.api
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable

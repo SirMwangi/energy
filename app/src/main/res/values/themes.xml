@@ -6,11 +6,7 @@
 
     <style name="Theme.Energy.Starting" parent="Theme.SplashScreen">
 
-        <item name="windowSplashScreenBackground">#E8F5E9</item>
-
-        <item name="windowSplashScreenAnimatedIcon">
-            @drawable/ic_energy_logo
-        </item>
+        <item name="windowSplashScreenBackground">#263228</item>
 
         <item name="postSplashScreenTheme">
             @style/Theme.Energy

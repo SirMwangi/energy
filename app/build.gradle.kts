@@ -20,11 +20,11 @@ val supabaseAnonKey: String = localProperties.getProperty("SUPABASE_ANON_KEY")
     ?: "sb_publishable_PeXsVtIFu1lsECKVbIp2cA_-Z5Wzu3V"
 
 android {
-    namespace = "com.example.energy"
+    namespace = "com.example.smartmoney"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.energy"
+        applicationId = "com.example.smartmoney"
         minSdk = 24
         targetSdk = 35
         versionCode = 1
@@ -83,6 +83,7 @@ dependencies {
     implementation(libs.okhttp.logging.interceptor)
 
     testImplementation(libs.junit)
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)
