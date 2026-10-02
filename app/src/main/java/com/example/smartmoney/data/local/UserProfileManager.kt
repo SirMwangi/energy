@@ -23,20 +23,32 @@ import java.io.File
  * update synchronously when a picture is uploaded or removed.
  */
 object UserProfileManager {
-    const val PROFILE_IMAGE_FILE_NAME = "user_profile_avatar.jpg"
-
     private val _profileBitmap = MutableStateFlow<ImageBitmap?>(null)
     val profileBitmap: StateFlow<ImageBitmap?> = _profileBitmap.asStateFlow()
 
+    @Volatile
+    private var currentUserId: String? = null
+
+    fun getAvatarFile(context: Context, userId: String): File {
+        return File(context.filesDir, "user_profile_${userId}_avatar.jpg")
+    }
+
     /**
-     * Initializes the manager asynchronously by reading any previously saved profile picture from app storage.
-     * Main-safe: safe to call from any thread or coroutine scope.
+     * Switches the active user, loading their specific profile avatar if present.
+     * If [userId] is null or the user has no saved avatar, resets the state to null (displaying fallback initials).
+     * Main-safe: runs disk I/O and bitmap decoding on [dispatcher].
      */
-    suspend fun initialize(
+    suspend fun switchUser(
         context: Context,
+        userId: String?,
         dispatcher: CoroutineDispatcher = Dispatchers.IO
     ) = withContext(dispatcher) {
-        val file = File(context.filesDir, PROFILE_IMAGE_FILE_NAME)
+        currentUserId = userId
+        if (userId.isNullOrBlank()) {
+            _profileBitmap.value = null
+            return@withContext
+        }
+        val file = getAvatarFile(context, userId)
         if (file.exists() && file.length() > 0) {
             try {
                 val bitmap = BitmapFactory.decodeFile(file.absolutePath)?.asImageBitmap()
@@ -50,22 +62,36 @@ object UserProfileManager {
     }
 
     /**
-     * Copies the picked image from the given URI to internal app storage on [Dispatchers.IO]
+     * Initializes the manager for backward compatibility. Delegates to [switchUser].
+     */
+    suspend fun initialize(
+        context: Context,
+        userId: String? = currentUserId,
+        dispatcher: CoroutineDispatcher = Dispatchers.IO
+    ) = switchUser(context, userId, dispatcher)
+
+    /**
+     * Copies the picked image from the given URI to internal app storage scoped to [userId] on [dispatcher]
      * and updates the reactive [profileBitmap] state.
      */
     suspend fun updateProfilePicture(
         context: Context,
         uri: Uri,
+        userId: String? = currentUserId,
         dispatcher: CoroutineDispatcher = Dispatchers.IO
     ): Boolean = withContext(dispatcher) {
+        val targetUserId = userId ?: currentUserId
+        if (targetUserId.isNullOrBlank()) return@withContext false
+
         try {
             context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                val file = File(context.filesDir, PROFILE_IMAGE_FILE_NAME)
+                val file = getAvatarFile(context, targetUserId)
                 file.outputStream().use { outputStream ->
                     inputStream.copyTo(outputStream)
                 }
                 val bitmap = BitmapFactory.decodeFile(file.absolutePath)?.asImageBitmap()
                 _profileBitmap.value = bitmap
+                currentUserId = targetUserId
                 true
             } ?: false
         } catch (e: Exception) {
@@ -75,16 +101,20 @@ object UserProfileManager {
     }
 
     /**
-     * Deletes the custom profile picture on [Dispatchers.IO] and resets the state to fallback initials.
+     * Deletes the user-scoped profile picture on [dispatcher] and resets the state to fallback initials.
      */
     suspend fun removeProfilePicture(
         context: Context,
+        userId: String? = currentUserId,
         dispatcher: CoroutineDispatcher = Dispatchers.IO
     ): Boolean = withContext(dispatcher) {
+        val targetUserId = userId ?: currentUserId
         try {
-            val file = File(context.filesDir, PROFILE_IMAGE_FILE_NAME)
-            if (file.exists()) {
-                file.delete()
+            if (!targetUserId.isNullOrBlank()) {
+                val file = getAvatarFile(context, targetUserId)
+                if (file.exists()) {
+                    file.delete()
+                }
             }
             _profileBitmap.value = null
             true
@@ -95,9 +125,18 @@ object UserProfileManager {
     }
 
     /**
+     * Wipes active session memory state, clearing current user and avatar bitmap.
+     */
+    fun clearSession() {
+        currentUserId = null
+        _profileBitmap.value = null
+    }
+
+    /**
      * Resets the in-memory bitmap state, primarily for testing purposes.
      */
     fun resetForTesting() {
-        _profileBitmap.value = null
+        clearSession()
     }
 }
+

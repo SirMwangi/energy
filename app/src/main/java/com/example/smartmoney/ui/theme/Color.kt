@@ -32,13 +32,15 @@ object SmartMoneyColors {
     val TextPrimary = Color(0xFF263228)     // Deep rich slate for maximum readability & contrast
     val TextMuted = DarkSlateGreen          // #657166: Secondary labels & subtitles
 
-    // Dark Theme Tokens (from navbar.md Section 3)
-    val DeepNavy = Color(0xFF0D1B2A)
-    val DarkBackground = Color(0xFF0F172A)
-    val DarkSurface = Color(0xFF1E293B)
-    val DarkBorderLine = Color(0xFF334155)
-    val DarkBorder = Color(0xFF1E293B)
-    val DarkTextPrimary = Color(0xFFE2E8F0)
-    val DarkActiveCyan = Color(0xFF38BDF8)
-    val DarkInactive = Color(0xFF94A3B8)
+    // Dark Theme Tokens (Dark Mode: Pure Black canvas, Dark Slate Green cards & bottom bar)
+    val DeepNavy = Color(0xFF1E2620)        // Deep forest slate for dark mode drawer/surfaces
+    val DarkBackground = Color(0xFF000000)  // Pure Black for page canvas
+    val DarkSurface = DarkSlateGreen        // #657166: Dark Slate Green for all cards
+    val DarkSurfaceElevated = Color(0xFF263228) // Deep Forest Slate for nested cards/pills
+    val DarkBorderLine = Color(0xFF7D8C7E).copy(alpha = 0.45f) // Subtle card/divider outline
+    val DarkBorder = Color(0xFF4C584E)      // Subtle dark card border
+    val DarkTextPrimary = Color(0xFFFFFFFF) // Crisp Pure White (21:1 on Black, 5.17:1 on DarkSlateGreen)
+    val DarkTextSecondary = Color(0xFFF0FDF4) // Mint White (19.8:1 on Black, 4.87:1 on DarkSlateGreen)
+    val DarkActiveCyan = Color(0xFFFFFFFF)  // High-contrast active element (replaces legacy cyan)
+    val DarkInactive = Color(0xFFDAEBE3)    // Pale Mint Green (4.17:1 on DarkSlateGreen)
 }

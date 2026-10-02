@@ -42,11 +42,12 @@ private data class MessageState(
 class BudgetViewModel(
     private val budgetRepository: BudgetRepository,
     private val transactionRepository: TransactionRepository? = null,
+    private val userId: String? = null,
     private val dispatchers: DispatcherProvider = DefaultDispatcherProvider()
 ) : ViewModel() {
 
     private val _messageState = MutableStateFlow(MessageState())
-    private val transactionsFlow = transactionRepository?.getTransactionsFlow() ?: flowOf(emptyList())
+    private val transactionsFlow = transactionRepository?.getTransactionsFlow(userId = userId) ?: flowOf(emptyList())
 
     val uiState: StateFlow<BudgetUiState> = combine(
         budgetRepository.getBudgets(),
@@ -154,11 +155,12 @@ class BudgetViewModel(
     class Factory(
         private val budgetRepository: BudgetRepository,
         private val transactionRepository: TransactionRepository? = null,
+        private val userId: String? = null,
         private val dispatchers: DispatcherProvider = DefaultDispatcherProvider()
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return BudgetViewModel(budgetRepository, transactionRepository, dispatchers) as T
+            return BudgetViewModel(budgetRepository, transactionRepository, userId, dispatchers) as T
         }
     }
 }

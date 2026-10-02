@@ -12,14 +12,17 @@ import java.math.BigDecimal
 @Entity(
     tableName = "transactions",
     indices = [
+        Index(value = ["userId"]),
         Index(value = ["accountId"]),
         Index(value = ["timestamp"]),
-        Index(value = ["accountId", "timestamp"])
+        Index(value = ["userId", "timestamp"]),
+        Index(value = ["userId", "accountId", "timestamp"])
     ]
 )
 data class TransactionEntity(
     @PrimaryKey
     val id: String,
+    val userId: String,
     val accountId: String,
     val amount: BigDecimal,
     val transactionType: String,
@@ -42,8 +45,9 @@ data class TransactionEntity(
     )
 
     companion object {
-        fun fromDomain(tx: Transaction): TransactionEntity = TransactionEntity(
+        fun fromDomain(tx: Transaction, userId: String = ""): TransactionEntity = TransactionEntity(
             id = tx.id,
+            userId = userId,
             accountId = tx.accountId,
             amount = tx.amount,
             transactionType = tx.transactionType,

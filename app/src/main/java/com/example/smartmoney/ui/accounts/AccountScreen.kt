@@ -1,6 +1,9 @@
 package com.example.smartmoney.ui.accounts
+import androidx.compose.ui.graphics.Color
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,8 +25,12 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.HorizontalDivider
+import com.example.smartmoney.core.util.CurrencyUtils
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -62,12 +69,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.smartmoney.domain.model.Account
 import com.example.smartmoney.domain.model.BankAccount
 import com.example.smartmoney.ui.components.BankLogo
 import kotlinx.coroutines.launch
-
+import java.math.BigDecimal
+import java.text.DecimalFormat
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.statusBars
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,92 +93,22 @@ fun AccountScreen(
     var accountToDelete by remember { mutableStateOf<Pair<String, String>?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val topClearance = statusBarTop + 64.dp
 
-    Scaffold(
-        modifier = modifier,
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showLinkDialog = true },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier
-                    .navigationBarsPadding()
-                    .padding(bottom = 80.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Link Bank Account"
-                )
-            }
-        }
-    ) { paddingValues ->
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues),
-            contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 100.dp),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = topClearance, bottom = 100.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Header: Page Title
-            item {
-                Text(
-                    text = "Accounts",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = "Energy Accounts",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-            }
 
-            // Section 1: Energy Accounts List or Empty State
-            if (isLoading && accounts.isEmpty()) {
-                item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(100.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator()
-                    }
-                }
-            } else if (accounts.isEmpty()) {
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                        )
-                    ) {
-                        Text(
-                            text = "No energy accounts available.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(16.dp)
-                        )
-                    }
-                }
-            } else {
-                items(
-                    items = accounts,
-                    key = { "energy_${it.id}" }
-                ) { account ->
-                    AccountCard(
-                        account = account,
-                        onDelete = { accountToDelete = account.id to account.accountName }
-                    )
-                }
-            }
 
-            // Section 2: Linked Bank Accounts Header
+            // Section 1: Linked Bank Accounts Header
             item {
                 Spacer(modifier = Modifier.height(16.dp))
                 Row(
@@ -233,12 +174,63 @@ fun AccountScreen(
                     items = bankAccounts,
                     key = { "bank_${it.id}" }
                 ) { bankAccount ->
+                    val accId = bankAccount.id
+                    val bName = bankAccount.bankName
+                    val masked = bankAccount.maskedAccountNumber
+                    val isKcb = remember(bName) { bName.equals("KCB", ignoreCase = true) }
+
+                    val onDelete = remember(accId, bName, masked) {
+                        {
+                            val label = "$bName ($masked)"
+                            accountToDelete = accId to label
+                        }
+                    }
+
+                    val onSimulateInflow: (() -> Unit)? = remember(accId, isKcb) {
+                        if (isKcb) {
+                            {
+                                viewModel.simulateKcbInflow(
+                                    amount = "1000.00",
+                                    onSuccess = {
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("⚡ Simulated KCB inflow of KES 1,000 received!")
+                                        }
+                                    },
+                                    onError = { error ->
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("Simulation failed: $error")
+                                        }
+                                    }
+                                )
+                            }
+                        } else null
+                    }
+
+                    val onSimulateOutflow: (() -> Unit)? = remember(accId, isKcb) {
+                        if (isKcb) {
+                            {
+                                viewModel.simulateKcbOutflow(
+                                    amount = "500.00",
+                                    onSuccess = {
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("⚡ Simulated KCB outflow of KES 500 paid!")
+                                        }
+                                    },
+                                    onError = { error ->
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("Simulation failed: $error")
+                                        }
+                                    }
+                                )
+                            }
+                        } else null
+                    }
+
                     BankAccountCard(
                         bankAccount = bankAccount,
-                        onDelete = {
-                            val label = "${bankAccount.bankName} (${bankAccount.maskedAccountNumber})"
-                            accountToDelete = bankAccount.id to label
-                        }
+                        onDelete = onDelete,
+                        onSimulateInflow = onSimulateInflow,
+                        onSimulateOutflow = onSimulateOutflow
                     )
                 }
             }
@@ -248,6 +240,29 @@ fun AccountScreen(
                 Spacer(modifier = Modifier.height(64.dp))
             }
         }
+
+        FloatingActionButton(
+            onClick = { showLinkDialog = true },
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .navigationBarsPadding()
+                .padding(bottom = 80.dp, end = 24.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = "Link Bank Account"
+            )
+        }
+
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 80.dp)
+        )
+    }
 
         // Link Bank Account Modal Dialog
         if (showLinkDialog) {
@@ -327,7 +342,6 @@ fun AccountScreen(
             )
         }
     }
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -495,64 +509,230 @@ fun LinkBankAccountDialog(
 @Composable
 fun BankAccountCard(
     bankAccount: BankAccount,
-    onDelete: () -> Unit = {}
+    onDelete: () -> Unit = {},
+    onSimulateInflow: (() -> Unit)? = null,
+    onSimulateOutflow: (() -> Unit)? = null
 ) {
+    val isKcb = remember(bankAccount.bankName) { bankAccount.bankName.equals("KCB", ignoreCase = true) }
+    val maskedNumber = remember(bankAccount.accountNumber) { bankAccount.maskedAccountNumber }
+    val formattedBalance = remember(bankAccount.balance) { CurrencyUtils.formatKes(bankAccount.balance) }
+
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(16.dp)
         ) {
-            BankLogo(
-                bankName = bankAccount.bankName,
-                modifier = Modifier.size(44.dp),
-                shape = CircleShape
+            // -------------------------------------------------------------
+            // 1. TOP HEADER ROW: Bank Identity, Card Type & Delete Action
+            // -------------------------------------------------------------
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    BankLogo(
+                        bankName = bankAccount.bankName,
+                        modifier = Modifier.size(40.dp),
+                        shape = RoundedCornerShape(10.dp)
+                    )
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Column {
+                        Text(
+                            text = bankAccount.bankName,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = maskedNumber,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer
+                    ) {
+                        Text(
+                            text = bankAccount.cardType,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onDelete,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Delete,
+                            contentDescription = "Remove bank account",
+                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.75f),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Subtle divider for clean visual hierarchy
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                thickness = 1.dp
             )
 
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = bankAccount.bankName,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                val maskedNumber = remember(bankAccount.accountNumber) { bankAccount.maskedAccountNumber }
-                Text(
-                    text = maskedNumber,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.secondaryContainer
+            // -------------------------------------------------------------
+            // 2. BALANCE & STATUS SECTION
+            // -------------------------------------------------------------
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom
             ) {
-                Text(
-                    text = bankAccount.cardType,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                )
+                Column {
+                    Text(
+                        text = "AVAILABLE BALANCE",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 0.5.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = formattedBalance,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                // Status Indicator
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = if (isKcb) Color(0xFF4CAF50).copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(if (isKcb) Color(0xFF4CAF50) else MaterialTheme.colorScheme.primary)
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = if (isKcb) "BUNI Live IPN" else "Connected",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            color = if (isKcb) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
 
-            Spacer(modifier = Modifier.width(4.dp))
+            // -------------------------------------------------------------
+            // 3. OPTIONAL KCB SANDBOX SIMULATION ACTIONS STRIP
+            // -------------------------------------------------------------
+            if (isKcb && (onSimulateInflow != null || onSimulateOutflow != null)) {
+                Spacer(modifier = Modifier.height(14.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (onSimulateInflow != null) {
+                        Surface(
+                            onClick = onSimulateInflow,
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFF4CAF50).copy(alpha = 0.12f),
+                            border = BorderStroke(1.dp, Color(0xFF4CAF50).copy(alpha = 0.35f)),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 7.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ArrowUpward,
+                                    contentDescription = null,
+                                    tint = Color(0xFF2E7D32),
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "+ Inflow (KES 1k)",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF2E7D32)
+                                )
+                            }
+                        }
+                    }
 
-            IconButton(onClick = onDelete) {
-                Icon(
-                    imageVector = Icons.Outlined.Delete,
-                    contentDescription = "Remove bank account",
-                    tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
-                )
+                    if (onSimulateOutflow != null) {
+                        Surface(
+                            onClick = onSimulateOutflow,
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.error.copy(alpha = 0.1f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.35f)),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 7.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ArrowDownward,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "- Outflow (KES 500)",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }

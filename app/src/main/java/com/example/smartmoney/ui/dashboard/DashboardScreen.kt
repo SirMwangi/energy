@@ -1,12 +1,15 @@
 package com.example.smartmoney.ui.dashboard
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,10 +38,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -47,18 +54,26 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.smartmoney.data.local.UserProfileManager
+import com.example.smartmoney.domain.model.Notification
 import com.example.smartmoney.ui.accounts.AccountScreen
 import com.example.smartmoney.ui.accounts.AccountViewModel
+import com.example.smartmoney.ui.accounts.LinkBankAccountDialog
 import com.example.smartmoney.ui.budget.BudgetScreen
 import com.example.smartmoney.ui.budget.BudgetViewModel
 import com.example.smartmoney.ui.components.AppTopBar
+import com.example.smartmoney.ui.components.LocalTopBarVisible
 import com.example.smartmoney.ui.components.MainResponsiveShell
 import com.example.smartmoney.ui.home.HomeScreen
+import com.example.smartmoney.ui.home.HomeUiState
+import com.example.smartmoney.ui.home.HomeViewModel
 import com.example.smartmoney.ui.investment.InvestmentScreen
 import com.example.smartmoney.ui.investment.InvestmentViewModel
 import com.example.smartmoney.ui.menu.MenuScreen
 import com.example.smartmoney.ui.more.MoreScreen
 import com.example.smartmoney.ui.navigation.Screen
+import com.example.smartmoney.ui.notifications.NotificationViewModel
+import com.example.smartmoney.ui.notifications.NotificationsScreen
+import com.example.smartmoney.ui.onboarding.AccountOnboardingBottomSheet
 import com.example.smartmoney.ui.theme.SmartMoneyColors
 import com.example.smartmoney.ui.transactions.TransactionScreen
 import com.example.smartmoney.ui.transactions.TransactionViewModel
@@ -68,10 +83,13 @@ import kotlinx.coroutines.launch
 fun DashboardScreen(
     userName: String,
     userEmail: String? = null,
+    userId: String? = null,
     accountViewModel: AccountViewModel,
     transactionViewModel: TransactionViewModel,
     budgetViewModel: BudgetViewModel,
     investmentViewModel: InvestmentViewModel,
+    notificationViewModel: NotificationViewModel? = null,
+    homeViewModel: HomeViewModel? = null,
     isDarkMode: Boolean = false,
     onToggleDarkMode: (Boolean) -> Unit = {},
     onLogout: () -> Unit
@@ -86,6 +104,18 @@ fun DashboardScreen(
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val navRoute = navBackStackEntry?.destination?.route ?: Screen.Dashboard.route
+    val unreadNotifCount by (notificationViewModel?.unreadCount?.collectAsState() ?: remember { mutableStateOf(0) })
+    val activeBanner by (notificationViewModel?.activeBanner?.collectAsState() ?: remember { mutableStateOf(null) })
+    val homeUiState by (homeViewModel?.uiState?.collectAsState() ?: remember { mutableStateOf(HomeUiState.DEFAULT) })
+    var showLinkDialog by remember { mutableStateOf(false) }
+    val showOnboardingSheet = homeUiState.shouldShowWelcomeSheet && !homeUiState.isLoading
+
+    // Automatically trigger transaction sync in the background only after settling on the Transactions tab
+    LaunchedEffect(bottomBarPagerState.settledPage) {
+        if (bottomBarPagerState.settledPage == 2) {
+            transactionViewModel.refreshTransactions()
+        }
+    }
 
     // Handle system Back button: if on Accounts, Activity, or More tab, return to Overview tab
     BackHandler(enabled = navRoute == Screen.Dashboard.route && bottomBarPagerState.currentPage != 0) {
@@ -98,6 +128,18 @@ fun DashboardScreen(
         navController = navController,
         userName = userName,
         pagerState = bottomBarPagerState,
+        unreadNotificationCount = unreadNotifCount,
+        activeBannerNotification = activeBanner,
+        onBannerDismiss = {
+            notificationViewModel?.dismissBanner()
+        },
+        onBannerClick = { notification ->
+            notificationViewModel?.markAsRead(notification.id)
+            notificationViewModel?.dismissBanner()
+            if (navRoute != Screen.Notifications.route) {
+                navController.navigate(Screen.Notifications.route)
+            }
+        },
         onSignOut = onLogout
     ) { paddingValues ->
         NavHost(
@@ -132,101 +174,93 @@ fun DashboardScreen(
                 .padding(paddingValues)
         ) {
             composable(Screen.Dashboard.route) {
-                HorizontalPager(
-                    state = bottomBarPagerState,
-                    modifier = Modifier.fillMaxSize(),
-                    beyondViewportPageCount = 1
-                ) { page ->
-                    when (page) {
-                        0 -> HomeScreen(
-                            userName = userName,
-                            accountViewModel = accountViewModel,
-                            transactionViewModel = transactionViewModel,
-                            onNotificationsClick = { navController.navigate(Screen.Notifications.route) },
-                            onSettingsClick = {
-//                                navController.navigate(Screen.Settings.route)
+                val currentPage = bottomBarPagerState.currentPage
+                val currentScreen = Screen.bottomBarScreens.getOrNull(currentPage)
+                val isOverviewPage = currentScreen == Screen.Dashboard
+                val currentTitle = currentScreen?.title ?: "Overview"
 
-                                              },
-                            onProfileClick = { navController.navigate(Screen.Settings.route) }
-                        )
-                        1 -> Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.background)
-                        ) {
-                            AppTopBar(
-                                title = Screen.Accounts.title,
+                val isTopBarVisible = LocalTopBarVisible.current
+                // Only the Home page (Overview) and More page (Menu) have a vanishing top bar on scroll.
+                // All other pages (Accounts, Transactions) keep the top bar fixed.
+                val shouldVanishOnScroll = currentScreen == Screen.Dashboard || currentScreen == Screen.Menu
+                val isTopBarShowing = if (shouldVanishOnScroll) isTopBarVisible else true
+
+                Box(modifier = Modifier.fillMaxSize()) {
+                    HorizontalPager(
+                        state = bottomBarPagerState,
+                        modifier = Modifier.fillMaxSize(),
+                        beyondViewportPageCount = 1
+                    ) { page ->
+                        when (page) {
+                            0 -> HomeScreen(
+                                uiState = homeUiState,
                                 userName = userName,
-                                profileBitmap = profileBitmap,
-                                isOverview = false,
-                                canNavigateBack = false,
+                                onSimulateInflow = { onSuccess, onError ->
+                                    homeViewModel?.simulateKcbInflow(onSuccess = onSuccess, onError = onError)
+                                },
+                                onSimulateOutflow = { onSuccess, onError ->
+                                    homeViewModel?.simulateKcbOutflow(onSuccess = onSuccess, onError = onError)
+                                },
+                                onLinkAccountClick = { showLinkDialog = true },
+                                unreadNotificationCount = unreadNotifCount,
                                 onNotificationsClick = { navController.navigate(Screen.Notifications.route) },
                                 onSettingsClick = { navController.navigate(Screen.Settings.route) },
-                                onProfileClick = { navController.navigate(Screen.Settings.route) },
-                                modifier = Modifier.statusBarsPadding()
+                                onProfileClick = { navController.navigate(Screen.Settings.route) }
                             )
-                            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                                AccountScreen(viewModel = accountViewModel)
-                            }
-                        }
-                        2 -> Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.background)
-                        ) {
-                            AppTopBar(
-                                title = Screen.Transactions.title,
+                            1 -> AccountScreen(viewModel = accountViewModel)
+                            2 -> TransactionScreen(
+                                viewModel = transactionViewModel,
+                                onNavigateToInvoice = { navController.navigate(Screen.Invoice.route) }
+                            )
+                            3 -> MenuScreen(
                                 userName = userName,
-                                profileBitmap = profileBitmap,
-                                isOverview = false,
-                                canNavigateBack = false,
-                                onNotificationsClick = { navController.navigate(Screen.Notifications.route) },
-                                onSettingsClick = { navController.navigate(Screen.Settings.route) },
-                                onProfileClick = { navController.navigate(Screen.Settings.route) },
-                                modifier = Modifier.statusBarsPadding()
-                            )
-                            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                                TransactionScreen(viewModel = transactionViewModel)
-                            }
-                        }
-                        3 -> Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.background)
-                        ) {
-                            AppTopBar(
-                                title = Screen.Menu.title,
-                                userName = userName,
-                                profileBitmap = profileBitmap,
-                                isOverview = false,
-                                canNavigateBack = false,
-                                onNotificationsClick = { navController.navigate(Screen.Notifications.route) },
-                                onSettingsClick = { navController.navigate(Screen.Settings.route) },
-                                onProfileClick = { navController.navigate(Screen.Settings.route) },
-                                modifier = Modifier.statusBarsPadding()
-                            )
-                            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                                MenuScreen(
-                                    userName = userName,
-                                    userEmail = userEmail,
-                                    onNavigate = { screen ->
-                                        if (screen in Screen.bottomBarScreens) {
-                                            val targetIndex = Screen.bottomBarScreens.indexOf(screen)
-                                            if (targetIndex >= 0) {
-                                                coroutineScope.launch {
-                                                    bottomBarPagerState.animateScrollToPage(targetIndex)
-                                                }
-                                            }
-                                        } else {
-                                            navController.navigate(screen.route) {
-                                                launchSingleTop = true
+                                userEmail = userEmail,
+                                onNavigate = { screen ->
+                                    if (screen in Screen.bottomBarScreens) {
+                                        val targetIndex = Screen.bottomBarScreens.indexOf(screen)
+                                        if (targetIndex >= 0) {
+                                            coroutineScope.launch {
+                                                bottomBarPagerState.animateScrollToPage(targetIndex)
                                             }
                                         }
-                                    },
-                                    onSignOut = onLogout
-                                )
-                            }
+                                    } else {
+                                        navController.navigate(screen.route) {
+                                            launchSingleTop = true
+                                        }
+                                    }
+                                },
+                                onSignOut = onLogout
+                            )
                         }
+                    }
+
+                    AnimatedVisibility(
+                        visible = isTopBarShowing,
+                        enter = slideInVertically(
+                            initialOffsetY = { -it },
+                            animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing)
+                        ) + fadeIn(animationSpec = tween(260)),
+                        exit = slideOutVertically(
+                            targetOffsetY = { -it },
+                            animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing)
+                        ) + fadeOut(animationSpec = tween(260)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .align(Alignment.TopCenter)
+                    ) {
+                        AppTopBar(
+                            title = currentTitle,
+                            userName = userName,
+                            profileBitmap = profileBitmap,
+                            isOverview = isOverviewPage,
+                            canNavigateBack = false,
+                            onProfileClick = { navController.navigate(Screen.Settings.route) },
+                            onNotificationsClick = { navController.navigate(Screen.Notifications.route) },
+                            onSettingsClick = { navController.navigate(Screen.Settings.route) },
+                            unreadNotificationCount = unreadNotifCount,
+                            containerColor = Color.Transparent,
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                 }
             }
@@ -269,18 +303,65 @@ fun DashboardScreen(
                 FeaturePlaceholderScreen(Screen.Reports, onBack = { navController.popBackStack() })
             }
             composable(Screen.Notifications.route) {
-                FeaturePlaceholderScreen(Screen.Notifications, onBack = { navController.popBackStack() })
+                if (notificationViewModel != null) {
+                    NotificationsScreen(
+                        viewModel = notificationViewModel,
+                        onBack = { navController.popBackStack() }
+                    )
+                } else {
+                    FeaturePlaceholderScreen(Screen.Notifications, onBack = { navController.popBackStack() })
+                }
             }
             composable(Screen.Settings.route) {
                 MoreScreen(
                     userName = userName,
                     userEmail = userEmail,
+                    userId = userId,
                     isDarkMode = isDarkMode,
                     onToggleDarkMode = onToggleDarkMode,
                     onLogout = onLogout
                 )
             }
+            composable(Screen.Invoice.route) {
+                com.example.smartmoney.ui.invoice.InvoiceScreen(
+                    onBack = { navController.popBackStack() },
+                    onSubmitSuccess = { pendingTx ->
+                        // Add the transaction manually via view model or repository
+                        // then pop back stack
+                        transactionViewModel.addPendingTransaction(pendingTx)
+                        navController.popBackStack()
+                    }
+                )
+            }
         }
+    }
+
+    if (showOnboardingSheet) {
+        AccountOnboardingBottomSheet(
+            onDismiss = { homeViewModel?.dismissWelcomeSheet() },
+            onLinkAccountClick = {
+                homeViewModel?.dismissWelcomeSheet()
+                showLinkDialog = true
+            }
+        )
+    }
+
+    if (showLinkDialog) {
+        LinkBankAccountDialog(
+            onDismiss = { showLinkDialog = false },
+            onSave = { bank, accNumber, cardType ->
+                homeViewModel?.linkBankAccount(
+                    bankName = bank,
+                    accountNumber = accNumber,
+                    cardType = cardType
+                ) ?: accountViewModel.addBankAccount(
+                    bankName = bank,
+                    accountNumber = accNumber,
+                    cardType = cardType
+                )
+                showLinkDialog = false
+            }
+        )
     }
 }
 

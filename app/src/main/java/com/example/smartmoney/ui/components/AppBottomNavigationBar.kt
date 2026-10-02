@@ -47,10 +47,10 @@ fun AppBottomNavigationBar(
     modifier: Modifier = Modifier
 ) {
     val isDark = LocalDarkTheme.current
-    val navContainerColor = if (isDark) SmartMoneyColors.DarkBackground else Color.White
-    val selectedCol = if (isDark) SmartMoneyColors.DarkActiveCyan else SmartMoneyColors.AzureDark
-    val indicatorCol = if (isDark) SmartMoneyColors.DarkSurface else SmartMoneyColors.AzureLight
-    val unselectedCol = if (isDark) SmartMoneyColors.DarkInactive else SmartMoneyColors.TextMuted
+    val navContainerColor = if (isDark) SmartMoneyColors.DarkSlateGreen else Color.White
+    val selectedCol = if (isDark) Color.White else SmartMoneyColors.AzureDark
+    val indicatorCol = if (isDark) SmartMoneyColors.DarkSurfaceElevated else SmartMoneyColors.AzureLight
+    val unselectedCol = if (isDark) SmartMoneyColors.PaleMintGreen.copy(alpha = 0.85f) else SmartMoneyColors.TextMuted
 
     val targetAlpha = when {
         isScrolling -> 0.55f
@@ -162,7 +162,7 @@ fun AppBottomNavigationBar(
             shadowElevation = elevation,
             tonalElevation = elevation,
             border = if (isDark) {
-                BorderStroke(1.dp, SmartMoneyColors.DarkSurface.copy(alpha = if (isCollapsed) 0.9f else 0.8f))
+                BorderStroke(1.dp, SmartMoneyColors.DarkBorderLine)
             } else if (isCollapsed) {
                 BorderStroke(1.dp, SmartMoneyColors.PaleSageGreen.copy(alpha = 0.85f))
             } else null

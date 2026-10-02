@@ -43,7 +43,7 @@ sealed class Screen(
     )
     object Transactions : Screen(
         route = "transactions",
-        title = "Activity",
+        title = "Transactions",
         icon = Icons.AutoMirrored.Outlined.ReceiptLong,
         group = NavGroup.FINANCES,
         showInBottomBar = true
@@ -97,12 +97,17 @@ sealed class Screen(
         group = NavGroup.NONE,
         showInBottomBar = true
     )
+    object Invoice : Screen(
+        route = "invoice",
+        title = "Add Invoice",
+        icon = Icons.AutoMirrored.Outlined.ReceiptLong
+    )
 
     companion object {
         val allScreens: List<Screen> by lazy {
             listOf(
                 Dashboard, Accounts, Transactions, CashFlow, Budgets,
-                Investments, Analytics, Reports, Notifications, Settings, Menu
+                Investments, Analytics, Reports, Notifications, Settings, Menu, Invoice
             )
         }
         val bottomBarScreens: List<Screen> by lazy {

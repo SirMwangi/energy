@@ -2,6 +2,7 @@ package com.example.smartmoney.domain.repository
 
 import com.example.smartmoney.domain.model.BankAccount
 import kotlinx.coroutines.flow.Flow
+import java.math.BigDecimal
 
 /**
  * Domain repository interface for managing linked bank accounts.
@@ -36,4 +37,11 @@ interface BankAccountRepository {
      * @return A cold/hot [Flow] emitting the latest list of [BankAccount] models.
      */
     fun getBankAccounts(): Flow<List<BankAccount>>
+
+    /**
+     * Adjusts the balance of the KCB account in the local database.
+     *
+     * @param delta The positive (credit) or negative (debit) amount to apply.
+     */
+    suspend fun adjustKcbBalance(delta: BigDecimal)
 }

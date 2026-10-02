@@ -199,9 +199,9 @@ private fun SidebarItem(
     }
 
     val contentColor = if (isSelected) {
-        if (isDark) SmartMoneyColors.DarkActiveCyan else SmartMoneyColors.AzureDark
+        if (isDark) Color.White else SmartMoneyColors.AzureDark
     } else {
-        if (isDark) SmartMoneyColors.DarkTextPrimary else Color.White
+        if (isDark) SmartMoneyColors.DarkInactive.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.85f)
     }
 
     Row(

@@ -30,6 +30,10 @@ class AuthRemoteDataSource(
     private var currentUserPhoneNumber: String? = null
     private var authToken: String? = null
 
+    init {
+        RetrofitClient.tokenProvider = { authToken }
+    }
+
     /**
      * Registers a new user via the Spring Boot backend endpoint POST /api/auth/register.
      */

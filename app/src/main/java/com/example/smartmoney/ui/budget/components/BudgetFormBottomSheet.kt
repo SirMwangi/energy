@@ -16,8 +16,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
@@ -34,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -139,21 +142,45 @@ fun BudgetFormBottomSheet(
             ) {
                 quickCategories.forEach { cat ->
                     val isSelected = category.equals(cat, ignoreCase = true)
+                    val visual = BudgetCategoryVisuals.getVisual(cat)
                     Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (isSelected) {
+                            if (isDark) SmartMoneyColors.PaleMintGreen else SmartMoneyColors.DarkSlateGreen
+                        } else {
+                            if (isDark) SmartMoneyColors.DarkSurfaceElevated else SmartMoneyColors.PaleMintGreen.copy(alpha = 0.4f)
+                        },
                         modifier = Modifier.clickable {
                             category = cat
                             errorMessage = null
                         }
                     ) {
-                        Text(
-                            text = cat,
-                            fontSize = 11.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = visual.icon,
+                                contentDescription = null,
+                                tint = if (isSelected) {
+                                    if (isDark) SmartMoneyColors.DarkSlateGreen else Color.White
+                                } else {
+                                    if (isDark) SmartMoneyColors.DarkInactive else SmartMoneyColors.DarkSlateGreen
+                                },
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text(
+                                text = cat,
+                                fontSize = 11.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isSelected) {
+                                    if (isDark) SmartMoneyColors.DarkSlateGreen else Color.White
+                                } else {
+                                    if (isDark) SmartMoneyColors.DarkTextPrimary else SmartMoneyColors.TextPrimary
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -168,6 +195,13 @@ fun BudgetFormBottomSheet(
                     errorMessage = null
                 },
                 label = { Text("Allocation Limit (KES)") },
+                prefix = {
+                    Text(
+                        text = "KES ",
+                        fontWeight = FontWeight.Bold,
+                        color = if (isDark) SmartMoneyColors.PaleMintGreen else SmartMoneyColors.DarkSlateGreen
+                    )
+                },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
@@ -343,13 +377,18 @@ fun BudgetFormBottomSheet(
                     onDismiss()
                 },
                 shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isDark) SmartMoneyColors.PaleMintGreen else SmartMoneyColors.DarkSlateGreen,
+                    contentColor = if (isDark) SmartMoneyColors.DarkSlateGreen else Color.White
+                ),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp)
             ) {
                 Text(
                     text = if (initialBudget == null) "Create Budget Allocation" else "Save Changes",
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp
                 )
             }
         }

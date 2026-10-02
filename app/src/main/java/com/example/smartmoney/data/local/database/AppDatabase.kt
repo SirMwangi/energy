@@ -7,10 +7,12 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import com.example.smartmoney.data.local.dao.AccountConnectionDao
 import com.example.smartmoney.data.local.dao.AccountDao
+import com.example.smartmoney.data.local.dao.NotificationDao
 import com.example.smartmoney.data.local.dao.TransactionDao
 import com.example.smartmoney.data.local.dao.UserDao
 import com.example.smartmoney.data.local.entity.AccountConnectionEntity
 import com.example.smartmoney.data.local.entity.AccountEntity
+import com.example.smartmoney.data.local.entity.NotificationEntity
 import com.example.smartmoney.data.local.entity.TransactionEntity
 import com.example.smartmoney.data.local.entity.UserEntity
 
@@ -23,9 +25,10 @@ import com.example.smartmoney.data.local.entity.UserEntity
         UserEntity::class,
         AccountEntity::class,
         AccountConnectionEntity::class,
-        TransactionEntity::class
+        TransactionEntity::class,
+        NotificationEntity::class
     ],
-    version = 2,
+    version = 4,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -35,6 +38,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun accountDao(): AccountDao
     abstract fun accountConnectionDao(): AccountConnectionDao
     abstract fun transactionDao(): TransactionDao
+    abstract fun notificationDao(): NotificationDao
 
     companion object {
         @Volatile

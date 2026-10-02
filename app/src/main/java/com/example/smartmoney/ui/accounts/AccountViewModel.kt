@@ -5,18 +5,15 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.smartmoney.core.coroutine.DefaultDispatcherProvider
 import com.example.smartmoney.core.coroutine.DispatcherProvider
-import com.example.smartmoney.data.repository.BankAccountRepositoryImpl
 import com.example.smartmoney.domain.model.Account
 import com.example.smartmoney.domain.model.BankAccount
 import com.example.smartmoney.domain.repository.AccountRepository
 import com.example.smartmoney.domain.repository.BankAccountRepository
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -54,10 +51,9 @@ class AccountViewModel(
         )
 
     val totalBalance: StateFlow<BigDecimal> = accounts.map { list ->
-        withContext(dispatchers.default) {
-            list.fold(BigDecimal.ZERO) { acc, account -> acc.add(account.availableBalance) }
-        }
-    }.stateIn(
+        list.fold(BigDecimal.ZERO) { acc, account -> acc.add(account.availableBalance) }
+    }.flowOn(dispatchers.default)
+    .stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = BigDecimal.ZERO
@@ -69,17 +65,12 @@ class AccountViewModel(
 
     fun refreshAccounts() {
         if (userId.isNotBlank()) {
-            viewModelScope.launch(dispatchers.main) {
+            viewModelScope.launch(dispatchers.io) {
                 _isLoading.value = true
                 try {
-                    coroutineScope {
-                        val accountsDeferred = async(dispatchers.io) {
-                            repository.syncAccounts(userId)
-                        }
-                        val bankAccountsDeferred = async(dispatchers.io) {
-                            (bankAccountRepository as? BankAccountRepositoryImpl)?.refreshBankAccounts()
-                        }
-                        awaitAll(accountsDeferred, bankAccountsDeferred)
+                    val result = repository.syncAccounts(userId)
+                    result.onFailure { e ->
+                        _bankAccountError.value = e.localizedMessage ?: "Failed to sync accounts"
                     }
                 } catch (e: Exception) {
                     _bankAccountError.value = e.localizedMessage ?: "Failed to sync accounts"
@@ -100,7 +91,7 @@ class AccountViewModel(
         onSuccess: (() -> Unit)? = null,
         onError: ((String) -> Unit)? = null
     ) {
-        viewModelScope.launch(dispatchers.main) {
+        viewModelScope.launch(dispatchers.io) {
             _isAddingBankAccount.value = true
             _bankAccountError.value = null
 
@@ -112,19 +103,74 @@ class AccountViewModel(
 
             _isAddingBankAccount.value = false
 
-            result.onSuccess {
-                _bankAccountError.value = null
-                onSuccess?.invoke()
-            }.onFailure { error ->
-                val message = error.localizedMessage ?: "Failed to link bank account"
-                _bankAccountError.value = message
-                onError?.invoke(message)
+            withContext(dispatchers.main) {
+                result.onSuccess {
+                    _bankAccountError.value = null
+                    onSuccess?.invoke()
+                }.onFailure { error ->
+                    val message = error.localizedMessage ?: "Failed to link bank account"
+                    _bankAccountError.value = message
+                    onError?.invoke(message)
+                }
             }
         }
     }
 
     fun clearBankAccountError() {
         _bankAccountError.value = null
+    }
+
+    fun simulateKcbInflow(
+        amount: String = "1000.00",
+        onSuccess: (() -> Unit)? = null,
+        onError: ((String) -> Unit)? = null
+    ) {
+        simulateKcbTransaction(amount = amount, direction = "Credit", onSuccess = onSuccess, onError = onError)
+    }
+
+    fun simulateKcbOutflow(
+        amount: String = "500.00",
+        onSuccess: (() -> Unit)? = null,
+        onError: ((String) -> Unit)? = null
+    ) {
+        simulateKcbTransaction(amount = amount, direction = "Debit", onSuccess = onSuccess, onError = onError)
+    }
+
+    fun simulateKcbTransaction(
+        amount: String = "1000.00",
+        direction: String = "Credit",
+        onSuccess: (() -> Unit)? = null,
+        onError: ((String) -> Unit)? = null
+    ) {
+        viewModelScope.launch(dispatchers.io) {
+            try {
+                val isDebit = direction.equals("Debit", ignoreCase = true)
+                val narration = if (isDebit) "Simulated KCB Outflow" else "Simulated KCB Inflow"
+                val req = com.example.smartmoney.data.remote.api.SimulateTransactionRequest(
+                    amount = amount,
+                    direction = direction,
+                    narration = narration
+                )
+                val response = com.example.smartmoney.data.remote.RetrofitClient.bankIntegrationApi.simulateKcbTransaction(req)
+                if (response.isSuccessful) {
+                    val parsedAmt = try { BigDecimal(amount) } catch (_: Exception) { BigDecimal.ZERO }
+                    val delta = if (isDebit) parsedAmt.negate() else parsedAmt
+                    bankAccountRepository.adjustKcbBalance(delta)
+                    repository.syncAccounts(userId)
+                    withContext(dispatchers.main) {
+                        onSuccess?.invoke()
+                    }
+                } else {
+                    withContext(dispatchers.main) {
+                        onError?.invoke("Simulation returned HTTP ${response.code()}")
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(dispatchers.main) {
+                    onError?.invoke(e.localizedMessage ?: "Network error during simulation")
+                }
+            }
+        }
     }
 
     /**
@@ -135,16 +181,22 @@ class AccountViewModel(
         onSuccess: (() -> Unit)? = null,
         onError: ((String) -> Unit)? = null
     ) {
-        viewModelScope.launch(dispatchers.main) {
+        viewModelScope.launch(dispatchers.io) {
             _isLoading.value = true
-            val result = repository.deleteAccount(accountId)
-            bankAccountRepository.removeBankAccount(accountId)
+            val isBankAccount = bankAccounts.value.any { it.id == accountId || it.accountNumber == accountId }
+            val result = if (isBankAccount) {
+                bankAccountRepository.removeBankAccount(accountId)
+            } else {
+                repository.deleteAccount(accountId)
+            }
             _isLoading.value = false
 
-            result.onSuccess {
-                onSuccess?.invoke()
-            }.onFailure { error ->
-                onError?.invoke(error.localizedMessage ?: "Failed to remove account")
+            withContext(dispatchers.main) {
+                result.onSuccess {
+                    onSuccess?.invoke()
+                }.onFailure { error ->
+                    onError?.invoke(error.localizedMessage ?: "Failed to remove account")
+                }
             }
         }
     }
@@ -155,20 +207,6 @@ class AccountViewModel(
         private val userId: String,
         private val dispatchers: DispatcherProvider = DefaultDispatcherProvider()
     ) : ViewModelProvider.Factory {
-
-        constructor(
-            repository: AccountRepository,
-            userId: String,
-            dispatchers: DispatcherProvider = DefaultDispatcherProvider()
-        ) : this(
-            repository = repository,
-            bankAccountRepository = BankAccountRepositoryImpl(
-                userId = userId,
-                dispatchers = dispatchers
-            ),
-            userId = userId,
-            dispatchers = dispatchers
-        )
 
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {

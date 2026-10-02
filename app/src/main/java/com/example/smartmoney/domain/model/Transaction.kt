@@ -17,7 +17,9 @@ data class Transaction(
     val description: String? = null,
     val providerTransactionId: String? = null,
     val createdAt: String? = null,
-    val updatedAt: String? = null
+    val updatedAt: String? = null,
+    val status: String = "COMPLETED",
+    val source: String = "BANK"
 ) {
     val transactionType: String
         get() = type

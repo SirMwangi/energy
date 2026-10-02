@@ -60,6 +60,7 @@ import com.example.smartmoney.ui.theme.SmartMoneyColors
 fun MoreScreen(
     userName: String? = null,
     userEmail: String? = null,
+    userId: String? = null,
     isDarkMode: Boolean = false,
     onToggleDarkMode: (Boolean) -> Unit = {},
     onLogout: () -> Unit
@@ -77,7 +78,7 @@ fun MoreScreen(
     ) { uri: Uri? ->
         if (uri != null) {
             coroutineScope.launch {
-                UserProfileManager.updateProfilePicture(context, uri)
+                UserProfileManager.updateProfilePicture(context, uri, userId = userId)
             }
         }
     }
@@ -87,7 +88,7 @@ fun MoreScreen(
     ) { uri: Uri? ->
         if (uri != null) {
             coroutineScope.launch {
-                UserProfileManager.updateProfilePicture(context, uri)
+                UserProfileManager.updateProfilePicture(context, uri, userId = userId)
             }
         }
     }
@@ -200,7 +201,7 @@ fun MoreScreen(
                         TextButton(
                             onClick = {
                                 coroutineScope.launch {
-                                    UserProfileManager.removeProfilePicture(context)
+                                    UserProfileManager.removeProfilePicture(context, userId = userId)
                                 }
                             },
                             colors = ButtonDefaults.textButtonColors(

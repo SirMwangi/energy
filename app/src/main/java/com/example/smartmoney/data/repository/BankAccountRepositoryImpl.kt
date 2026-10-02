@@ -28,43 +28,32 @@ import java.util.UUID
 class BankAccountRepositoryImpl(
     private val remoteDataSource: AccountRemoteDataSource = AccountRemoteDataSource(),
     private val localDao: AccountDao? = null,
-    private val userId: String,
+    private val userIdProvider: () -> String,
     private val dispatchers: DispatcherProvider = DefaultDispatcherProvider()
 ) : BankAccountRepository {
+
+    constructor(
+        remoteDataSource: AccountRemoteDataSource = AccountRemoteDataSource(),
+        localDao: AccountDao? = null,
+        userId: String,
+        dispatchers: DispatcherProvider = DefaultDispatcherProvider()
+    ) : this(
+        remoteDataSource = remoteDataSource,
+        localDao = localDao,
+        userIdProvider = { userId },
+        dispatchers = dispatchers
+    )
 
     private val _bankAccountsFlow = MutableStateFlow<List<BankAccount>>(emptyList())
 
     override fun getBankAccounts(): Flow<List<BankAccount>> {
+        val currentUserId = userIdProvider()
         return if (localDao != null) {
-            localDao.getAccountsForUser(userId).map { list ->
+            localDao.getAccountsForUser(currentUserId).map { list ->
                 list.map { it.toBankAccount() }
-            }.flowOn(dispatchers.default).onStart {
-                refreshBankAccounts()
-            }
+            }.flowOn(dispatchers.default)
         } else {
-            _bankAccountsFlow.asStateFlow().onStart {
-                refreshBankAccounts()
-            }
-        }
-    }
-
-    /**
-     * Synchronizes and updates bank accounts from the Spring Boot accounts-service.
-     */
-    suspend fun refreshBankAccounts(): Result<List<BankAccount>> = withContext(dispatchers.io) {
-        try {
-            val remoteAccounts = remoteDataSource.fetchAccounts(userId)
-            val bankAccounts = remoteAccounts.map { it.toBankAccount() }
-            _bankAccountsFlow.value = bankAccounts
-
-            if (localDao != null) {
-                val entities = remoteAccounts.map { AccountEntity.fromDomain(it) }
-                localDao.upsertAccounts(entities)
-            }
-
-            Result.success(bankAccounts)
-        } catch (e: Exception) {
-            Result.failure(e)
+            _bankAccountsFlow.asStateFlow()
         }
     }
 
@@ -74,10 +63,11 @@ class BankAccountRepositoryImpl(
         cardType: String
     ): Result<Unit> = withContext(dispatchers.io) {
         try {
+            val currentUserId = userIdProvider()
             val effectiveUserId = try {
-                UUID.fromString(userId).toString()
+                UUID.fromString(currentUserId).toString()
             } catch (_: Exception) {
-                UUID.nameUUIDFromBytes(userId.toByteArray()).toString()
+                UUID.nameUUIDFromBytes(currentUserId.toByteArray()).toString()
             }
 
             val trimmedNumber = accountNumber.trim()
@@ -93,36 +83,46 @@ class BankAccountRepositoryImpl(
                 "DEPOSIT"
             }
 
-            // 1. If KCB is selected, attempt linking via bank-integration-service (:8090)
-            if (bankName.trim().equals("KCB", ignoreCase = true)) {
+            // 1. If a supported bank (KCB, Stanbic, NCBA, Equity) is selected, attempt linking via bank-integration-service (:8090)
+            val bankKey = bankName.trim().lowercase()
+            val isSupportedBank = bankKey in listOf("kcb", "stanbic", "ncba", "equity")
+
+            if (isSupportedBank) {
                 try {
+                    val generatedAccountId = UUID.randomUUID().toString()
+                    val accountTitle = "${bankName.trim()} ${cardType.trim()} Account"
                     val linkReq = LinkBankRequest(
-                        userId = effectiveUserId,
+                        bankId = bankKey,
                         accountNumber = trimmedNumber,
-                        cardType = cardType.trim(),
-                        bankId = "kcb"
+                        userId = effectiveUserId,
+                        accountName = accountTitle,
+                        accountId = generatedAccountId,
+                        cardType = cardType.trim()
                     )
-                    val response = RetrofitClient.bankIntegrationApi.linkKcbAccount(linkReq)
-                    if (response.isSuccessful && response.body()?.success == true) {
+                    val response = RetrofitClient.bankIntegrationApi.linkAccount(linkReq)
+                    if (response.isSuccessful && response.body() != null) {
                         val body = response.body()!!
+                        val accountId = body.accountId?.ifBlank { null } ?: generatedAccountId
+                        val initialBalance = BigDecimal.ZERO
                         val linkedAccount = BankAccount(
-                            id = body.accountId,
-                            bankName = body.institution,
-                            accountNumber = body.accountNumber,
-                            cardType = body.cardType
+                            id = accountId,
+                            bankName = bankName.trim(),
+                            accountNumber = body.accountNumber.ifBlank { trimmedNumber },
+                            cardType = cardType.trim(),
+                            balance = initialBalance
                         )
                         if (localDao != null) {
                             val entity = AccountEntity(
-                                id = body.accountId,
+                                id = accountId,
                                 userId = effectiveUserId,
-                                accountId = body.accountNumber,
-                                accountName = body.accountName,
-                                institution = body.institution,
-                                accountType = if (body.cardType.equals("Credit", ignoreCase = true)) "CREDIT" else "DEPOSIT",
-                                maskedIdentifier = body.maskedIdentifier,
+                                accountId = body.accountNumber.ifBlank { trimmedNumber },
+                                accountName = body.accountName ?: accountTitle,
+                                institution = bankName.trim(),
+                                accountType = accountType,
+                                maskedIdentifier = masked,
                                 currency = "KES",
-                                ledgerBalance = BigDecimal.ZERO,
-                                availableBalance = BigDecimal.ZERO,
+                                ledgerBalance = initialBalance,
+                                availableBalance = initialBalance,
                                 creditOutstanding = BigDecimal.ZERO,
                                 creditLimit = BigDecimal.ZERO,
                                 availableCredit = BigDecimal.ZERO,
@@ -155,7 +155,29 @@ class BankAccountRepositoryImpl(
                 dataSource = "MANUAL"
             )
 
-            val created = remoteDataSource.createAccount(request)
+            val created = try {
+                remoteDataSource.createAccount(request)
+            } catch (_: Exception) {
+                // Offline fallback if accounts-service is unreachable or offline
+                Account(
+                    id = UUID.randomUUID().toString(),
+                    userId = effectiveUserId,
+                    accountId = trimmedNumber,
+                    accountName = "${bankName.trim()} ${cardType.trim()} Account",
+                    institution = bankName.trim(),
+                    accountType = accountType,
+                    maskedIdentifier = masked,
+                    currency = "KES",
+                    ledgerBalance = BigDecimal.ZERO,
+                    availableBalance = BigDecimal.ZERO,
+                    creditOutstanding = BigDecimal.ZERO,
+                    creditLimit = BigDecimal.ZERO,
+                    availableCredit = BigDecimal.ZERO,
+                    accountStatus = "ACTIVE",
+                    connectionStatus = "CONNECTED",
+                    dataSource = "MANUAL"
+                )
+            }
 
             if (localDao != null) {
                 localDao.upsertAccount(AccountEntity.fromDomain(created))
@@ -172,7 +194,32 @@ class BankAccountRepositoryImpl(
 
     override suspend fun removeBankAccount(id: String): Result<Unit> = withContext(dispatchers.io) {
         try {
-            remoteDataSource.deleteAccount(id)
+            // 1. Try unlinking via bank-integration-service (:8090)
+            try {
+                val longId = id.toLongOrNull()
+                if (longId != null) {
+                    RetrofitClient.bankIntegrationApi.unlinkAccount(longId.toString())
+                } else {
+                    val linksResponse = RetrofitClient.bankIntegrationApi.getAccountLinks()
+                    if (linksResponse.isSuccessful) {
+                        val matchingLink = linksResponse.body().orEmpty().find { it.accountId == id || it.accountNumber == id }
+                        matchingLink?.id?.let { linkId ->
+                            RetrofitClient.bankIntegrationApi.unlinkAccount(linkId.toString())
+                        }
+                    }
+                }
+            } catch (_: Exception) {
+                // Ignore bank integration unlinking errors
+            }
+
+            // Fallback attempt to delete from accounts-service (:8082) if manual account
+            try {
+                remoteDataSource.deleteAccount(id)
+            } catch (_: Exception) {
+                // Best effort remote deletion
+            }
+
+            // 2. Always remove locally from Room cache and StateFlow
             if (localDao != null) {
                 localDao.deleteAccountById(id)
             }
@@ -183,17 +230,24 @@ class BankAccountRepositoryImpl(
         }
     }
 
+    override suspend fun adjustKcbBalance(delta: BigDecimal) = withContext(dispatchers.io) {
+        localDao?.adjustKcbBalance(delta)
+        Unit
+    }
+
     private fun Account.toBankAccount(): BankAccount = BankAccount(
         id = this.id,
         bankName = this.institution,
         accountNumber = this.accountId,
-        cardType = if (this.accountType.equals("CREDIT", ignoreCase = true)) "Credit" else "Debit"
+        cardType = if (this.accountType.equals("CREDIT", ignoreCase = true)) "Credit" else "Debit",
+        balance = this.availableBalance
     )
 
     private fun AccountEntity.toBankAccount(): BankAccount = BankAccount(
         id = this.id,
         bankName = this.institution,
         accountNumber = this.accountId,
-        cardType = if (this.accountType.equals("CREDIT", ignoreCase = true)) "Credit" else "Debit"
+        cardType = if (this.accountType.equals("CREDIT", ignoreCase = true)) "Credit" else "Debit",
+        balance = this.availableBalance
     )
 }

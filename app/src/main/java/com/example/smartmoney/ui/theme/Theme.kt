@@ -18,19 +18,21 @@ import androidx.compose.ui.platform.LocalContext
 val LocalDarkTheme = compositionLocalOf { false }
 
 private val DarkColorScheme = darkColorScheme(
-    primary = SmartMoneyColors.DarkActiveCyan,
-    onPrimary = SmartMoneyColors.DarkBackground,
-    primaryContainer = SmartMoneyColors.DarkSurface,
-    onPrimaryContainer = SmartMoneyColors.DarkActiveCyan,
-    secondary = SmartMoneyColors.AzurePrimary,
-    onSecondary = Color.White,
-    background = SmartMoneyColors.DarkBackground,
-    onBackground = SmartMoneyColors.DarkTextPrimary,
-    surface = SmartMoneyColors.DarkSurface,
-    onSurface = SmartMoneyColors.DarkTextPrimary,
-    surfaceVariant = SmartMoneyColors.DeepNavy,
-    onSurfaceVariant = SmartMoneyColors.DarkInactive,
-    outline = SmartMoneyColors.DarkBorderLine,
+    primary = SmartMoneyColors.PaleMintGreen,           // #DAEBE3: Pale Mint Green brand accent
+    onPrimary = SmartMoneyColors.DarkSlateGreen,        // Crisp text on pale mint badges
+    primaryContainer = SmartMoneyColors.DarkSurfaceElevated, // #263228: Deep forest slate container
+    onPrimaryContainer = Color.White,
+    secondary = SmartMoneyColors.PowderBlue,
+    onSecondary = Color.Black,
+    secondaryContainer = SmartMoneyColors.DarkSurfaceElevated,
+    onSecondaryContainer = SmartMoneyColors.DarkTextSecondary,
+    background = SmartMoneyColors.DarkBackground,       // #000000: Pure Black canvas (user specified)
+    onBackground = SmartMoneyColors.DarkTextPrimary,    // #FFFFFF: Pure White (21:1 AAA contrast)
+    surface = SmartMoneyColors.DarkSurface,             // #657166: Dark Slate Green for cards (user specified)
+    onSurface = SmartMoneyColors.DarkTextPrimary,       // #FFFFFF: Pure White (5.17:1 AA contrast)
+    surfaceVariant = SmartMoneyColors.DarkSurfaceElevated, // #263228: Deep Forest Slate for inner nested items
+    onSurfaceVariant = SmartMoneyColors.DarkTextSecondary, // #F0FDF4: Mint White (4.87:1 AA contrast)
+    outline = SmartMoneyColors.DarkBorderLine,          // Subtle outline for cards
     outlineVariant = SmartMoneyColors.DarkBorder
 )
 

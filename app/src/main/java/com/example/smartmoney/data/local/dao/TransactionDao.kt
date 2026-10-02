@@ -10,6 +10,12 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface TransactionDao {
 
+    @Query("SELECT * FROM transactions WHERE userId = :userId ORDER BY timestamp DESC")
+    fun getTransactionsForUser(userId: String): Flow<List<TransactionEntity>>
+
+    @Query("SELECT * FROM transactions WHERE userId = :userId AND accountId = :accountId ORDER BY timestamp DESC")
+    fun getTransactionsForAccount(userId: String, accountId: String): Flow<List<TransactionEntity>>
+
     @Query("SELECT * FROM transactions ORDER BY timestamp DESC")
     fun getAllTransactions(): Flow<List<TransactionEntity>>
 
@@ -22,4 +28,10 @@ interface TransactionDao {
 
     @Upsert
     suspend fun upsertTransaction(transaction: TransactionEntity)
+
+    @Query("DELETE FROM transactions WHERE userId = :userId")
+    suspend fun clearTransactionsForUser(userId: String)
+
+    @Query("DELETE FROM transactions")
+    suspend fun clearAll()
 }

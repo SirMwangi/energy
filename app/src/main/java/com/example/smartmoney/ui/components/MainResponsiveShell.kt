@@ -22,8 +22,10 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,16 +47,30 @@ import com.example.smartmoney.data.local.UserProfileManager
 import com.example.smartmoney.ui.navigation.Screen
 import com.example.smartmoney.ui.theme.LocalDarkTheme
 import com.example.smartmoney.ui.theme.SmartMoneyColors
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.ui.zIndex
+import com.example.smartmoney.domain.model.Notification
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
+
+/**
+ * CompositionLocal providing current visibility state of top app bar across screens.
+ * Driven by nested scroll events to vanish the top bar when the user scrolls down through content.
+ */
+val LocalTopBarVisible = compositionLocalOf { true }
 
 @Composable
 fun MainResponsiveShell(
     navController: NavHostController = rememberNavController(),
     userName: String = "User",
     pagerState: PagerState? = null,
+    unreadNotificationCount: Int = 0,
+    activeBannerNotification: Notification? = null,
+    onBannerDismiss: () -> Unit = {},
+    onBannerClick: (Notification) -> Unit = {},
     onSignOut: () -> Unit = {},
     content: @Composable (PaddingValues) -> Unit
 ) {
@@ -89,6 +105,7 @@ fun MainResponsiveShell(
     val drawerBg = if (isDark) SmartMoneyColors.DeepNavy else SmartMoneyColors.AzurePrimary
 
     var isBottomBarCollapsed by rememberSaveable { mutableStateOf(false) }
+    var isTopBarVisible by rememberSaveable { mutableStateOf(true) }
     var isScrolling by remember { mutableStateOf(false) }
     var scrollStopJob by remember { mutableStateOf<Job?>(null) }
 
@@ -108,11 +125,13 @@ fun MainResponsiveShell(
                     }
                 }
                 if (delta < -scrollThresholdPx) {
-                    // Scrolling down (content moving up) -> collapse to floating pill
+                    // Scrolling down (content moving up) -> hide top bar & collapse bottom bar
                     isBottomBarCollapsed = true
+                    isTopBarVisible = false
                 } else if (delta > scrollThresholdPx) {
-                    // Scrolling up (content moving down) -> expand to flush bar
+                    // Scrolling up (content moving down) -> show top bar & expand bottom bar
                     isBottomBarCollapsed = false
+                    isTopBarVisible = true
                 }
                 return Offset.Zero
             }
@@ -130,14 +149,20 @@ fun MainResponsiveShell(
                         isScrolling = false
                     }
                 }
+                if (available.y > 0) {
+                    // Reached the top of the content and continuing to pull down
+                    isTopBarVisible = true
+                    isBottomBarCollapsed = false
+                }
                 return Offset.Zero
             }
         }
     }
 
-    // Reset bottom bar to expanded state whenever route or active page changes
+    // Reset top bar and bottom bar to visible/expanded state whenever route or active page changes
     LaunchedEffect(currentRoute, pagerState?.currentPage) {
         isBottomBarCollapsed = false
+        isTopBarVisible = true
         isScrolling = false
         scrollStopJob?.cancel()
     }
@@ -186,13 +211,13 @@ fun MainResponsiveShell(
                     .fillMaxSize()
                     .nestedScroll(nestedScrollConnection),
                 containerColor = MaterialTheme.colorScheme.background,
-                contentWindowInsets = if (isBottomBarScreen) {
+                contentWindowInsets = if (isBottomBarScreen || currentRoute == Screen.Notifications.route) {
                     WindowInsets(0, 0, 0, 0)
                 } else {
                     ScaffoldDefaults.contentWindowInsets
                 },
                 topBar = {
-                    if (!isBottomBarScreen) {
+                    if (!isBottomBarScreen && currentRoute != Screen.Notifications.route) {
                         AppTopBar(
                             title = Screen.allScreens.find { it.route == currentRoute }?.title ?: "Overview",
                             userName = userName,
@@ -202,26 +227,29 @@ fun MainResponsiveShell(
                             onBackClick = { navController.popBackStack() },
                             onProfileClick = { navigateTo(Screen.Settings.route) },
                             onNotificationsClick = { navigateTo(Screen.Notifications.route) },
-                            onSettingsClick = { navigateTo(Screen.Settings.route) }
+                            onSettingsClick = { navigateTo(Screen.Settings.route) },
+                            unreadNotificationCount = unreadNotificationCount
                         )
                     }
                 }
             ) { innerPadding ->
-                Box(
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    content(innerPadding)
+                CompositionLocalProvider(LocalTopBarVisible provides isTopBarVisible) {
+                    Box(
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        content(innerPadding)
 
-                    if (isBottomBarScreen) {
-                        AppBottomNavigationBar(
-                            currentRoute = currentRoute,
-                            onNavigate = { screen ->
-                                navigateTo(screen.route)
-                            },
-                            isCollapsed = isBottomBarCollapsed,
-                            isScrolling = isScrolling,
-                            modifier = Modifier.align(Alignment.BottomCenter)
-                        )
+                        if (isBottomBarScreen) {
+                            AppBottomNavigationBar(
+                                currentRoute = currentRoute,
+                                onNavigate = { screen ->
+                                    navigateTo(screen.route)
+                                },
+                                isCollapsed = isBottomBarCollapsed,
+                                isScrolling = isScrolling,
+                                modifier = Modifier.align(Alignment.BottomCenter)
+                            )
+                        }
                     }
                 }
             }
@@ -242,6 +270,19 @@ fun MainResponsiveShell(
                             )
                         )
                     )
+            )
+
+            // In-App Notification Dropdown Banner
+            InAppNotificationBannerHost(
+                bannerNotification = activeBannerNotification,
+                onDismiss = onBannerDismiss,
+                onClick = onBannerClick,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
+                    .zIndex(100f)
             )
         }
     }

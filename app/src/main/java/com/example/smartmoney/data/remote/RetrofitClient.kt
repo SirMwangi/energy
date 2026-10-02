@@ -33,6 +33,11 @@ object RetrofitClient {
     const val TRANSACTIONS_PORT = 8083
     const val BANK_INTEGRATION_PORT = 8090
 
+    /**
+     * Provider supplying the active JWT authentication token.
+     */
+    var tokenProvider: (() -> String?)? = null
+
     private val json = Json {
         ignoreUnknownKeys = true
         isLenient = true
@@ -40,11 +45,50 @@ object RetrofitClient {
         coerceInputValues = true
     }
 
+    private val authInterceptor = okhttp3.Interceptor { chain ->
+        val original = chain.request()
+        val token = tokenProvider?.invoke()
+        val request = if (!token.isNullOrBlank() && original.header("Authorization") == null) {
+            original.newBuilder()
+                .header("Authorization", "Bearer $token")
+                .build()
+        } else {
+            original
+        }
+        chain.proceed(request)
+    }
+
+    const val FALLBACK_HOST: String = "192.168.68.121"
+
+    private val hostFallbackInterceptor = okhttp3.Interceptor { chain ->
+        val request = chain.request()
+        val originalUrl = request.url
+        try {
+            chain.proceed(request)
+        } catch (e: Exception) {
+            if ((e is java.net.ConnectException || e is java.net.SocketTimeoutException) &&
+                (originalUrl.host == "127.0.0.1" || originalUrl.host == "localhost")
+            ) {
+                val newUrl = originalUrl.newBuilder()
+                    .host(FALLBACK_HOST)
+                    .build()
+                val newRequest = request.newBuilder()
+                    .url(newUrl)
+                    .build()
+                chain.proceed(newRequest)
+            } else {
+                throw e
+            }
+        }
+    }
+
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BODY
     }
 
     private val okHttpClient: OkHttpClient = OkHttpClient.Builder()
+        .addInterceptor(authInterceptor)
+        .addInterceptor(hostFallbackInterceptor)
         .addInterceptor(loggingInterceptor)
         .connectTimeout(120, TimeUnit.SECONDS)
         .readTimeout(120, TimeUnit.SECONDS)

@@ -6,6 +6,7 @@ import androidx.room.Transaction
 import androidx.room.Upsert
 import com.example.smartmoney.data.local.entity.AccountEntity
 import kotlinx.coroutines.flow.Flow
+import java.math.BigDecimal
 
 @Dao
 interface AccountDao {
@@ -15,6 +16,15 @@ interface AccountDao {
 
     @Query("SELECT * FROM accounts WHERE id = :id")
     suspend fun getAccountById(id: String): AccountEntity?
+
+    @Query("SELECT * FROM accounts WHERE institution = 'KCB' OR accountName LIKE '%KCB%' LIMIT 1")
+    suspend fun getKcbAccount(): AccountEntity?
+
+    @Query("UPDATE accounts SET availableBalance = :newBalance, ledgerBalance = :newBalance WHERE institution = 'KCB' OR accountName LIKE '%KCB%'")
+    suspend fun updateKcbBalance(newBalance: BigDecimal)
+
+    @Query("UPDATE accounts SET availableBalance = availableBalance + :delta, ledgerBalance = ledgerBalance + :delta WHERE institution = 'KCB' OR accountName LIKE '%KCB%'")
+    suspend fun adjustKcbBalance(delta: BigDecimal)
 
     @Transaction
     @Upsert
