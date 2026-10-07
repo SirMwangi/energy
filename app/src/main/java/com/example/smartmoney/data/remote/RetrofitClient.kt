@@ -32,6 +32,7 @@ object RetrofitClient {
     const val ACCOUNTS_PORT = 8082
     const val TRANSACTIONS_PORT = 8083
     const val BANK_INTEGRATION_PORT = 8090
+    const val ASSISTANT_PORT = 8091
 
     /**
      * Provider supplying the active JWT authentication token.
@@ -124,5 +125,12 @@ object RetrofitClient {
      */
     val bankIntegrationApi: BankIntegrationApi by lazy {
         buildRetrofit(BANK_INTEGRATION_PORT).create(BankIntegrationApi::class.java)
+    }
+
+    /**
+     * Singleton instance of the [com.example.smartmoney.data.remote.api.RahaApi] interface targeting assistant-service (:8091).
+     */
+    val rahaApi: com.example.smartmoney.data.remote.api.RahaApi by lazy {
+        buildRetrofit(ASSISTANT_PORT).create(com.example.smartmoney.data.remote.api.RahaApi::class.java)
     }
 }

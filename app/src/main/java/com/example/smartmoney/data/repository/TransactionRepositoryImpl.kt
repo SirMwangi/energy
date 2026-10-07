@@ -89,22 +89,6 @@ class TransactionRepositoryImpl(
                         localDao.upsertTransactions(kcbEntities)
                     }
 
-                    // Reconcile KCB account balance reactively: 10,000 baseline + sum(credits) - sum(debits)
-                    if (accountDao != null && kcbList.isNotEmpty()) {
-                        var totalCredits = BigDecimal.ZERO
-                        var totalDebits = BigDecimal.ZERO
-                        for (tx in kcbList) {
-                            val amt = try { BigDecimal(tx.amount) } catch (_: Exception) { BigDecimal.ZERO }
-                            if (tx.direction.equals("Debit", ignoreCase = true)) {
-                                totalDebits = totalDebits.add(amt)
-                            } else {
-                                totalCredits = totalCredits.add(amt)
-                            }
-                        }
-                        val reconciledBalance = BigDecimal.ZERO.add(totalCredits).subtract(totalDebits)
-                        accountDao.updateKcbBalance(reconciledBalance)
-                    }
-
                     // Ingest notifications for any KCB transactions (persisted in Room, duplicate-safe)
                     if (notificationDao != null && kcbList.isNotEmpty()) {
                         val notifEntities = kcbList.map { tx ->
