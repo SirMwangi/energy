@@ -17,7 +17,7 @@ import retrofit2.Response
  * Remote data source routing authentication directly through the Spring Boot backend via Retrofit.
  * Completely eliminates any client-side Supabase GoTrue calls.
  */
-class AuthRemoteDataSource(
+class eAuthRemoteDataSource(
     val authApi: AuthApi = RetrofitClient.authApi
 ) {
 

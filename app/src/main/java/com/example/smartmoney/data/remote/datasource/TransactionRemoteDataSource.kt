@@ -6,14 +6,24 @@ import io.github.jan.supabase.postgrest.postgrest
 
 class TransactionRemoteDataSource(private val client: SupabaseClient) {
 
-    suspend fun fetchTransactions(accountId: String? = null): List<TransactionDto> {
+    /**
+     * Fetches transactions strictly bound to the specified [accountIds].
+     * Never executes unbounded selects to prevent data leaks from accounts with no relation to the user.
+     */
+    suspend fun fetchTransactions(accountIds: List<String>): List<TransactionDto> {
+        val validIds = accountIds.filter { it.isNotBlank() }
+        if (validIds.isEmpty()) return emptyList()
+
         return client.postgrest["transactions"].select {
             filter {
-                if (accountId != null) {
-                    eq("account_id", accountId)
-                }
+                isIn("account_id", validIds)
             }
         }.decodeList<TransactionDto>()
+    }
+
+    suspend fun fetchTransactions(accountId: String? = null): List<TransactionDto> {
+        if (accountId.isNullOrBlank()) return emptyList()
+        return fetchTransactions(listOf(accountId))
     }
 
     suspend fun recordTransaction(transaction: TransactionDto): TransactionDto {

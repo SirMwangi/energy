@@ -7,6 +7,11 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.material3.Scaffold
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.IconButton
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
@@ -78,6 +83,8 @@ import com.example.smartmoney.ui.raha.RahaViewModel
 import com.example.smartmoney.ui.theme.SmartMoneyColors
 import com.example.smartmoney.ui.transactions.TransactionScreen
 import com.example.smartmoney.ui.transactions.TransactionViewModel
+import com.example.smartmoney.ui.analytics.AnalyticsViewModel
+import com.example.smartmoney.ui.analytics.AnalyticsScreen
 import kotlinx.coroutines.launch
 
 @androidx.compose.material3.ExperimentalMaterial3Api
@@ -93,6 +100,7 @@ fun DashboardScreen(
     notificationViewModel: NotificationViewModel? = null,
     homeViewModel: HomeViewModel? = null,
     rahaViewModel: RahaViewModel? = null,
+    analyticsViewModel: AnalyticsViewModel? = null,
     isDarkMode: Boolean = false,
     onToggleDarkMode: (Boolean) -> Unit = {},
     onLogout: () -> Unit
@@ -110,6 +118,11 @@ fun DashboardScreen(
     val unreadNotifCount by (notificationViewModel?.unreadCount?.collectAsState() ?: remember { mutableStateOf(0) })
     val activeBanner by (notificationViewModel?.activeBanner?.collectAsState() ?: remember { mutableStateOf(null) })
     val homeUiState by (homeViewModel?.uiState?.collectAsState() ?: remember { mutableStateOf(HomeUiState.DEFAULT) })
+    val investmentUiState by investmentViewModel.uiState.collectAsState()
+    val totalInvestmentBalance = remember(investmentUiState) {
+        val minor = investmentUiState.portfolioValuationMinor ?: investmentUiState.totalPrincipalMinor
+        java.math.BigDecimal(minor).divide(java.math.BigDecimal(100))
+    }
     var showLinkDialog by remember { mutableStateOf(false) }
     val showOnboardingSheet = homeUiState.shouldShowWelcomeSheet && !homeUiState.isLoading
 
@@ -198,6 +211,7 @@ fun DashboardScreen(
                         when (page) {
                             0 -> HomeScreen(
                                 uiState = homeUiState,
+                                totalInvestmentBalance = totalInvestmentBalance,
                                 userName = userName,
                                 onLinkAccountClick = { showLinkDialog = true },
                                 unreadNotificationCount = unreadNotifCount,
@@ -290,16 +304,25 @@ fun DashboardScreen(
             composable(Screen.Budgets.route) {
                 BudgetScreen(
                     viewModel = budgetViewModel,
-                    accountViewModel = accountViewModel
+                    accountViewModel = accountViewModel,
+                    onBack = { navController.popBackStack() }
                 )
             }
             composable(Screen.Investments.route) {
                 InvestmentScreen(
-                    viewModel = investmentViewModel
+                    viewModel = investmentViewModel,
+                    onBack = { navController.popBackStack() }
                 )
             }
             composable(Screen.Analytics.route) {
-                FeaturePlaceholderScreen(Screen.Analytics, onBack = { navController.popBackStack() })
+                if (analyticsViewModel != null) {
+                    AnalyticsScreen(
+                        viewModel = analyticsViewModel,
+                        onBack = { navController.popBackStack() }
+                    )
+                } else {
+                    FeaturePlaceholderScreen(Screen.Analytics, onBack = { navController.popBackStack() })
+                }
             }
             composable(Screen.Reports.route) {
                 FeaturePlaceholderScreen(Screen.Reports, onBack = { navController.popBackStack() })
@@ -368,13 +391,28 @@ fun DashboardScreen(
 }
 
 @Composable
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 private fun FeaturePlaceholderScreen(
     screen: Screen,
     onBack: () -> Unit = {}
 ) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(screen.title, style = MaterialTheme.typography.titleMedium) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                windowInsets = WindowInsets(0, 0, 0, 0)
+            )
+        }
+    ) { paddingValues ->
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .padding(paddingValues)
             .padding(24.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -437,4 +475,5 @@ private fun FeaturePlaceholderScreen(
             }
         }
     }
+}
 }

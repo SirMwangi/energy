@@ -29,6 +29,9 @@ interface TransactionDao {
     @Upsert
     suspend fun upsertTransaction(transaction: TransactionEntity)
 
+    @Query("DELETE FROM transactions WHERE userId = :userId AND (accountId = :accountId OR accountId IN (SELECT accountId FROM accounts WHERE id = :accountId AND userId = :userId))")
+    suspend fun deleteTransactionsForAccount(userId: String, accountId: String)
+
     @Query("DELETE FROM transactions WHERE userId = :userId")
     suspend fun clearTransactionsForUser(userId: String)
 

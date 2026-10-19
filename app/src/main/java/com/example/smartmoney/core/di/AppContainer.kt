@@ -74,6 +74,8 @@ class DefaultAppContainer(
         AccountRepositoryImpl(
             remoteDataSource = accountRemoteDataSource,
             localDao = database.accountDao(),
+            transactionDao = database.transactionDao(),
+            userIdProvider = { authRepository.currentUserId() },
             dispatchers = dispatchers
         )
     }
@@ -82,6 +84,7 @@ class DefaultAppContainer(
         BankAccountRepositoryImpl(
             remoteDataSource = accountRemoteDataSource,
             localDao = database.accountDao(),
+            transactionDao = database.transactionDao(),
             userIdProvider = { authRepository.currentUserId() ?: "default-user" },
             dispatchers = dispatchers
         )
@@ -91,6 +94,7 @@ class DefaultAppContainer(
         return BankAccountRepositoryImpl(
             remoteDataSource = accountRemoteDataSource,
             localDao = database.accountDao(),
+            transactionDao = database.transactionDao(),
             userId = userId,
             dispatchers = dispatchers
         )

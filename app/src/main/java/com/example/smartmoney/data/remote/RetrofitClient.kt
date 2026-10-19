@@ -35,6 +35,28 @@ object RetrofitClient {
     const val ASSISTANT_PORT = 8091
 
     /**
+     * Hosted URL for the bank-integration-service on Render.
+     */
+    const val BANK_INTEGRATION_RENDER_URL: String = "https://bank-integration-service.onrender.com/"
+
+    /**
+     * Base URL for the bank-integration-service. Defaults to the live Render deployment.
+     * Can be dynamically reassigned to point to local host or custom endpoint if needed.
+     */
+    var bankIntegrationBaseUrl: String = try {
+        val field = com.example.smartmoney.BuildConfig::class.java.getField("BANK_INTEGRATION_URL")
+        (field.get(null) as? String)?.takeIf { it.isNotBlank() } ?: BANK_INTEGRATION_RENDER_URL
+    } catch (_: Throwable) {
+        BANK_INTEGRATION_RENDER_URL
+    }
+        set(value) {
+            field = if (value.endsWith("/")) value else "$value/"
+            _bankIntegrationApi = null
+        }
+
+    private var _bankIntegrationApi: BankIntegrationApi? = null
+
+    /**
      * Provider supplying the active JWT authentication token.
      */
     var tokenProvider: (() -> String?)? = null
@@ -96,11 +118,28 @@ object RetrofitClient {
         .writeTimeout(120, TimeUnit.SECONDS)
         .build()
 
+    /**
+     * The deployed api-gateway (API_BASE_URL in local.properties). When set, the
+     * per-port services go through it, so the app reads the same data as the web
+     * app. Empty means local services on [host], as before. The bank-integration
+     * client keeps its own Render URL.
+     */
+    private val deployedGateway: String = com.example.smartmoney.BuildConfig.API_BASE_URL.trim().trimEnd('/')
+
     private fun buildRetrofit(servicePort: Int): Retrofit {
         val port = gatewayPort ?: servicePort
-        val baseUrl = "http://$host:$port/"
+        val baseUrl = if (deployedGateway.isNotEmpty()) "$deployedGateway/" else "http://$host:$port/"
         return Retrofit.Builder()
             .baseUrl(baseUrl)
+            .client(okHttpClient)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+    }
+
+    private fun buildRetrofitWithBaseUrl(baseUrl: String): Retrofit {
+        val normalizedUrl = if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/"
+        return Retrofit.Builder()
+            .baseUrl(normalizedUrl)
             .client(okHttpClient)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
@@ -121,10 +160,34 @@ object RetrofitClient {
     }
 
     /**
-     * Singleton instance of the [BankIntegrationApi] interface targeting bank-integration-service (:8090).
+     * The signed-in user's real transactions from transactions-service (:8083),
+     * the same movements the web dashboard shows.
      */
-    val bankIntegrationApi: BankIntegrationApi by lazy {
-        buildRetrofit(BANK_INTEGRATION_PORT).create(BankIntegrationApi::class.java)
+    val activityApi: com.example.smartmoney.data.remote.api.ActivityApi by lazy {
+        buildRetrofit(TRANSACTIONS_PORT).create(com.example.smartmoney.data.remote.api.ActivityApi::class.java)
+    }
+
+    /**
+     * Singleton instance of the [BankIntegrationApi] interface targeting bank-integration-service.
+     * Connects directly to the hosted Render cloud deployment (https://bank-integration-service.onrender.com/).
+     */
+    val bankIntegrationApi: BankIntegrationApi
+        get() = _bankIntegrationApi ?: buildRetrofitWithBaseUrl(bankIntegrationBaseUrl)
+            .create(BankIntegrationApi::class.java)
+            .also { _bankIntegrationApi = it }
+
+    /**
+     * Switches bank integration requests to a local machine instance (:8090).
+     */
+    fun useLocalBankIntegration() {
+        bankIntegrationBaseUrl = "http://$host:$BANK_INTEGRATION_PORT/"
+    }
+
+    /**
+     * Switches bank integration requests to the Render cloud instance.
+     */
+    fun useRenderBankIntegration() {
+        bankIntegrationBaseUrl = BANK_INTEGRATION_RENDER_URL
     }
 
     /**

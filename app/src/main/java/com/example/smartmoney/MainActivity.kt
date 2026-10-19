@@ -26,6 +26,8 @@ import com.example.smartmoney.ui.notifications.NotificationViewModel
 import com.example.smartmoney.ui.raha.RahaViewModel
 import com.example.smartmoney.ui.theme.EnergyTheme
 import com.example.smartmoney.ui.transactions.TransactionViewModel
+import com.example.smartmoney.ui.analytics.AnalyticsViewModel
+import com.example.smartmoney.ui.analytics.AnalyticsViewModelFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -100,6 +102,16 @@ class MainActivity : ComponentActivity() {
                             val userName = authViewModel.currentUserName() ?: "User"
                             val userEmail = authViewModel.currentUserEmail()
 
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                                val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+                                    contract = androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+                                ) { _ -> }
+
+                                LaunchedEffect(Unit) {
+                                    permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                                }
+                            }
+
                             LaunchedEffect(currentUserId) {
                                 if (currentUserId.isNotBlank()) {
                                     UserProfileManager.switchUser(this@MainActivity, currentUserId)
@@ -111,7 +123,8 @@ class MainActivity : ComponentActivity() {
                                 factory = AccountViewModel.Factory(
                                     repository = appContainer.accountRepository,
                                     bankAccountRepository = appContainer.bankAccountRepository,
-                                    userId = currentUserId
+                                    userId = currentUserId,
+                                    transactionRepository = appContainer.transactionRepository
                                 )
                             )
 
@@ -156,6 +169,16 @@ class MainActivity : ComponentActivity() {
                                 )
                             )
 
+                            val analyticsViewModel: AnalyticsViewModel = viewModel(
+                                key = "analytics_$currentUserId",
+                                factory = AnalyticsViewModelFactory(
+                                    bankAccountRepository = appContainer.bankAccountRepository,
+                                    investmentRepository = appContainer.investmentRepository,
+                                    transactionRepository = appContainer.transactionRepository,
+                                    budgetRepository = appContainer.budgetRepository
+                                )
+                            )
+
                             val rahaViewModel: RahaViewModel = viewModel(
                                 key = "raha_$currentUserId",
                                 factory = RahaViewModel.Factory(appContainer.rahaRepository)
@@ -186,6 +209,7 @@ class MainActivity : ComponentActivity() {
                                     notificationViewModel = notificationViewModel,
                                     homeViewModel = homeViewModel,
                                     rahaViewModel = rahaViewModel,
+                                    analyticsViewModel = analyticsViewModel,
                                     isDarkMode = isDarkMode,
                                     onToggleDarkMode = { isDarkMode = it },
                                     onLogout = {
