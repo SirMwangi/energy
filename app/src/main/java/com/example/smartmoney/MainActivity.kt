@@ -28,6 +28,7 @@ import com.example.smartmoney.ui.theme.EnergyTheme
 import com.example.smartmoney.ui.transactions.TransactionViewModel
 import com.example.smartmoney.ui.analytics.AnalyticsViewModel
 import com.example.smartmoney.ui.analytics.AnalyticsViewModelFactory
+import com.example.smartmoney.ui.reports.ReportsViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -147,7 +148,10 @@ class MainActivity : ComponentActivity() {
 
                             val investmentViewModel: InvestmentViewModel = viewModel(
                                 key = "investment_$currentUserId",
-                                factory = InvestmentViewModel.Factory(appContainer.investmentRepository)
+                                factory = InvestmentViewModel.Factory(
+                                    investmentRepository = appContainer.investmentRepository,
+                                    userId = currentUserId
+                                )
                             )
 
                             val notificationViewModel: NotificationViewModel = viewModel(
@@ -184,6 +188,15 @@ class MainActivity : ComponentActivity() {
                                 factory = RahaViewModel.Factory(appContainer.rahaRepository)
                             )
 
+                            val reportsViewModel: ReportsViewModel = viewModel(
+                                key = "reports_$currentUserId",
+                                factory = ReportsViewModel.Factory(
+                                    transactionDao = appContainer.database.transactionDao(),
+                                    accountDao = appContainer.database.accountDao(),
+                                    userPreferencesRepository = appContainer.userPreferencesRepository
+                                )
+                            )
+
                             if (!isWarmUpCompleted) {
                                 val warmUpViewModel: com.example.smartmoney.ui.warmup.WarmUpSyncViewModel = viewModel(
                                     key = "warmup_$currentUserId",
@@ -210,6 +223,7 @@ class MainActivity : ComponentActivity() {
                                     homeViewModel = homeViewModel,
                                     rahaViewModel = rahaViewModel,
                                     analyticsViewModel = analyticsViewModel,
+                                    reportsViewModel = reportsViewModel,
                                     isDarkMode = isDarkMode,
                                     onToggleDarkMode = { isDarkMode = it },
                                     onLogout = {

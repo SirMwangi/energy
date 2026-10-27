@@ -20,8 +20,9 @@ val supabaseAnonKey: String = localProperties.getProperty("SUPABASE_ANON_KEY")
     ?: "sb_publishable_PeXsVtIFu1lsECKVbIp2cA_-Z5Wzu3V"
 val bankIntegrationUrl: String = localProperties.getProperty("BANK_INTEGRATION_URL")
     ?: "https://bank-integration-service.onrender.com/"
-// Deployed api-gateway. Empty = local services on RetrofitClient.host per port.
-val apiBaseUrl: String = localProperties.getProperty("API_BASE_URL") ?: ""
+// Production Render Gateway
+val apiBaseUrl: String = localProperties.getProperty("API_BASE_URL")
+    ?: "https://api-gateway-cbby.onrender.com/"
 
 android {
     namespace = "com.example.smartmoney"

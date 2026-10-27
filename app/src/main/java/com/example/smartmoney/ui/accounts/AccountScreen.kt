@@ -368,7 +368,7 @@ fun LinkBankAccountDialog(
     onDismiss: () -> Unit,
     onSave: (bank: String, accNumber: String, cardType: String) -> Unit
 ) {
-    val bankOptions = listOf("NCBA", "Equity", "KCB", "Stanbic")
+    val bankOptions = listOf("M-PESA", "NCBA", "Equity", "KCB", "Stanbic")
     var bankExpanded by remember { mutableStateOf(false) }
     var selectedBank by remember { mutableStateOf("") }
 

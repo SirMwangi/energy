@@ -85,6 +85,8 @@ import com.example.smartmoney.ui.transactions.TransactionScreen
 import com.example.smartmoney.ui.transactions.TransactionViewModel
 import com.example.smartmoney.ui.analytics.AnalyticsViewModel
 import com.example.smartmoney.ui.analytics.AnalyticsScreen
+import com.example.smartmoney.ui.reports.ReportsViewModel
+import com.example.smartmoney.ui.reports.ReportsScreen
 import kotlinx.coroutines.launch
 
 @androidx.compose.material3.ExperimentalMaterial3Api
@@ -101,6 +103,7 @@ fun DashboardScreen(
     homeViewModel: HomeViewModel? = null,
     rahaViewModel: RahaViewModel? = null,
     analyticsViewModel: AnalyticsViewModel? = null,
+    reportsViewModel: ReportsViewModel? = null,
     isDarkMode: Boolean = false,
     onToggleDarkMode: (Boolean) -> Unit = {},
     onLogout: () -> Unit
@@ -325,7 +328,14 @@ fun DashboardScreen(
                 }
             }
             composable(Screen.Reports.route) {
-                FeaturePlaceholderScreen(Screen.Reports, onBack = { navController.popBackStack() })
+                if (reportsViewModel != null) {
+                    ReportsScreen(
+                        viewModel = reportsViewModel,
+                        onBack = { navController.popBackStack() }
+                    )
+                } else {
+                    FeaturePlaceholderScreen(Screen.Reports, onBack = { navController.popBackStack() })
+                }
             }
             composable(Screen.Notifications.route) {
                 if (notificationViewModel != null) {

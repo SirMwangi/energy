@@ -5,9 +5,11 @@ import com.example.smartmoney.core.coroutine.DispatcherProvider
 import com.example.smartmoney.data.local.dao.AccountDao
 import com.example.smartmoney.data.local.dao.NotificationDao
 import com.example.smartmoney.data.local.dao.TransactionDao
+import com.example.smartmoney.data.local.entity.AccountEntity
 import com.example.smartmoney.data.local.entity.NotificationEntity
 import com.example.smartmoney.data.local.entity.TransactionEntity
 import com.example.smartmoney.data.remote.RetrofitClient
+import com.example.smartmoney.data.remote.api.BankTransactionResponse
 import com.example.smartmoney.data.remote.datasource.TransactionRemoteDataSource
 import com.example.smartmoney.data.remote.dto.TransactionDto
 import com.example.smartmoney.domain.model.Transaction
@@ -97,7 +99,7 @@ class TransactionRepositoryImpl(
                     val kcbList = kcbResponse.body().orEmpty()
 
                     // STRICT FILTER: Match incoming transaction against accounts actually owned by targetUserId
-                    val verifiedMovements = kcbList.mapNotNull { kcbTx ->
+                    val verifiedMovements: List<Pair<BankTransactionResponse, AccountEntity>> = kcbList.mapNotNull { kcbTx: BankTransactionResponse ->
                         val txAccountNum = kcbTx.accountNumber?.trim().orEmpty()
                         val bankKey = (kcbTx.bankId.ifBlank { "kcb" }).trim().lowercase(Locale.ROOT)
 
